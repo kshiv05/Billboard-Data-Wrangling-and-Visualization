@@ -1,0 +1,140 @@
+---
+title: "Assignment1-Shivam-Billboard Data Wrangling and Visualization"
+author: "Kumar Shivam"
+date: "20/10/2021"
+output: html_document
+---
+## Initializing and Exporting the libraries
+```{r message=FALSE,warning=FALSE}
+knitr::opts_chunk$set()
+rm(list = ls())
+library(tidyverse)
+library(ggplot2)
+library(kableExtra)
+```
+## Read the dataset and print first 10 records
+The Billboard dataset has been sourced from GitHub. It contains the details when a song frst entered the billboard Top 100. It has columns such as track name, artist name, date entered, genre of the track, length of the song, week, etc. The rank in each week is recorded in 76 columns: x1st.week	till x76th.week.	
+```{r message=FALSE,warning=FALSE}
+billboard.df = read_csv("Assignment1-Shivam-Billboard-Data-Wrangling-and-Visualization.csv")
+kable(head(billboard.df,10),format="html",table.attr="style='width:30%;'") %>%
+  kableExtra::kable_styling()
+glimpse(billboard.df)
+```
+
+
+As per the above display of the data, it can be seen that the dataset is not tidy. One variable (i.e., rank) is spread across multiple columns (i.e., week) and hence violates one of the tidy data principles.
+
+## Check for any missing data and empty cells
+```{r message=FALSE,warning=FALSE}
+#Check for any missing data
+colSums(is.na(billboard.df))
+
+#Check for any emptry cells
+colSums(billboard.df=='')
+```
+
+## Rename artist.inverted column to artist
+```{r message=FALSE,warning=FALSE}
+billboard1.df <- billboard.df %>% 
+  rename(artist = artist.inverted)
+```
+
+## Tidy the data and print first 10 rows
+
+The data is being tidied using tidyr. We're not making use of time, date.peaked and x66th.week till x76th.week as these are not required. The columns from x66th.week till x76th.week are having NA values, hence they're not being used in tidying the data.
+```{r message=FALSE,warning=FALSE}
+billboard2.df <- billboard1.df %>%
+    select (-c(time,date.peaked,x66th.week:x76th.week)) %>%
+    pivot_longer(
+      x1st.week:x65th.week,
+      names_to = "week",
+      values_to = "rank",
+      values_drop_na = TRUE
+    )
+kable(head(billboard2.df,10),format="html",table.attr="style='width:30%;'") %>%
+  kableExtra::kable_styling()
+```
+
+## Use dplyr to manipulate the data
+Create a new column which has the numeric week number instead of string week number
+```{r message=FALSE,warning=FALSE}
+billboard3.df <- billboard2.df %>%
+  mutate(
+    week = as.integer(gsub("[a-z]*", "", week))
+  )
+kable(head(billboard3.df,10),format="html",table.attr="style='width:30%;'") %>%
+  kableExtra::kable_styling()
+```
+
+The data is tidy now as now we can see the ranking of the tracks week-wise. The rank is now in 1 column instead of being spread across 76 columns. 
+
+## Data Visualizations
+
+Before proceeding onto the data visualization, let's first implement sorting and group_by on the datafframe so that the plotting become easlier. 
+
+*Grouping by the dataframe on week and taking out the count of the number of songs, that appeared in top 100 songs:
+```{r message=FALSE,warning=FALSE}
+billboard5.df <- billboard3.df %>% 
+  group_by(week) %>%
+  summarise(n_track=n()) %>%
+  arrange(desc(n_track))
+```
+
+*Grouping by the dataframe on artist and track (song):
+```{r message=FALSE,warning=FALSE}
+billboard4.df <- billboard3.df %>% 
+  group_by(artist,track) %>%
+  summarise(n_track=n()) %>%
+  arrange(desc(n_track))
+```
+
+**1) No. of tracks on billboard each week**
+
+Please note, that there could be multiple songs at the same rank, in a week. For example, in week 1, song A and song B can be on rank 50.
+
+```{r message=FALSE,warning=FALSE}
+billboard5.df %>%
+  ggplot(mapping=aes(y=n_track,x=week,fill=(n_track))) +
+  geom_bar(stat = 'identity', position = 'dodge') +
+  labs(title = "No. of tracks on billboard each week",
+       x = "Week",
+       y = "No. of tracks each week")
+```
+
+The above plot shows the number of tracks on the billboard for each week. This plot is meaningful as it gives us an insight that the number of tracks decreases as the number of weeks passes by. After week 20, there's a sudden drop in the number of tracks on the billboard. This means the tracks do well mostly for about 20 weeks.
+
+**2) Top 10 artists with the most number of tracks on the billboard**
+
+```{r message=FALSE,warning=FALSE}
+billboard4.df %>%
+  distinct(track) %>%
+  group_by(artist) %>%
+  count() %>%
+  ungroup() %>% 
+  top_n(10, n) %>%
+  slice(1:10) %>%
+  arrange(desc(n)) %>%
+  ggplot(aes(y = fct_reorder(artist, n), x = n, fill = artist)) +
+  geom_bar(stat = 'identity', position = 'dodge') +
+  labs(title = "Top 10 artists with the most number of tracks on the billboard",
+       y = "Artist Name",
+       x = "No. of Tracks")
+```
+
+The above plot depicts the top 10 artists and the number of their songs which were on the billboard. This shows that the listeners preferred Jay-Z's songs the most as the artist had 5 songs on the billboard.
+
+**3) Top Eminem Tracks**
+
+```{r message=FALSE,warning=FALSE}
+billboard2.df %>%
+  filter(artist == "Eminem") %>%
+  group_by(track) %>%
+  count() %>%
+  ggplot(aes(x = fct_reorder(track,n), y = n, fill = track)) +
+  geom_bar(stat = 'identity', position = 'dodge') +
+  labs(title = "Top Eminem Tracks",
+       x = "Name of track",
+       y = "No. of weeks")
+```
+
+The inference which we can derieve from the above plot is that Eminem had 3 songs on the billboard and the track "The Real Slim Shady" remained on the billboard for over 15 weeks. Out of all his songs, "The Way I Am" track was not liked by many listeners and hence it showed up on the billboard for 10 weeks.
